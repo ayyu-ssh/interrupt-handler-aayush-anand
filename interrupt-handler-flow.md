@@ -1,170 +1,248 @@
 # Interrupt Handler Flow Diagram
 
-This document visualizes the flow of the interrupt handler system used in the voice agent application.
+This document explains the flow of the interrupt handler system used in the voice agent application.
 
 ## Overview
 
 The interrupt handler manages user interruptions during agent speech, distinguishing between meaningful interruptions and backchannel responses (like "yeah", "ok", "hmm").
 
-## Architecture Overview
+## System Architecture
 
-```mermaid
-graph TB
-    subgraph "System Components"
-        IC[InterruptController]
-        SH[Session Handlers]
-        AG[Voice Agent]
-    end
-    
-    subgraph "Configuration"
-        IW[Ignore Words<br/>yeah, ok, hmm, uh]
-        IRW[Interrupt Words<br/>stop, wait, no, cancel]
-        GP[Grace Period<br/>250ms]
-    end
-    
-    subgraph "State"
-        AS[agent_is_speaking<br/>TRUE/FALSE]
-        PI[pending_interrupt<br/>TRUE/FALSE]
-        PS[pending_since<br/>timestamp]
-    end
-    
-    IW --> IC
-    IRW --> IC
-    GP --> IC
-    IC --> AS
-    IC --> PI
-    IC --> PS
-    SH --> IC
-    AG --> SH
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     VOICE AGENT SYSTEM                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐      ┌──────────────────┐                │
+│  │ Voice Agent │─────▶│ Session Handlers │                │
+│  └─────────────┘      └────────┬─────────┘                │
+│                                 │                           │
+│                                 ▼                           │
+│                    ┌──────────────────────┐                │
+│                    │ InterruptController  │                │
+│                    └──────────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+```
+┌──────────────────────────────────────────────────────┐
+│ INTERRUPT CONTROLLER CONFIGURATION                   │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│ Ignore Words (Backchannel):                        │
+│ ┌────────────────────────────────────────────┐     │
+│ │ yeah, ok, okay, hmm, uh, uh-huh,          │     │
+│ │ aha, right, correct                        │     │
+│ └────────────────────────────────────────────┘     │
+│                                                      │
+│ Interrupt Words (Explicit Commands):               │
+│ ┌────────────────────────────────────────────┐     │
+│ │ stop, wait, no, cancel, hold               │     │
+│ └────────────────────────────────────────────┘     │
+│                                                      │
+│ Grace Period: 250ms                                 │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+### State Variables
+
+```
+┌──────────────────────────────────────────┐
+│ STATE TRACKING                           │
+├──────────────────────────────────────────┤
+│                                          │
+│ agent_is_speaking    : Boolean          │
+│   → TRUE when agent is speaking          │
+│   → FALSE when agent is silent           │
+│                                          │
+│ pending_interrupt    : Boolean          │
+│   → TRUE when user speaks during agent   │
+│   → FALSE otherwise                      │
+│                                          │
+│ pending_since        : Timestamp        │
+│   → Records when user started speaking   │
+│                                          │
+└──────────────────────────────────────────┘
 ```
 
 ## Event Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant VAD as Voice Activity<br/>Detection
-    participant STT as Speech-to-Text
-    participant IC as Interrupt<br/>Controller
-    participant Agent
-    
-    Agent->>IC: State Changed (Speaking)
-    IC->>IC: agent_is_speaking = TRUE
-    
-    User->>VAD: Starts Speaking
-    VAD->>IC: User Speech Detected
-    IC->>IC: pending_interrupt = TRUE<br/>pending_since = now()
-    
-    User->>STT: Continues Speaking
-    STT->>IC: Transcript (Final)
-    
-    IC->>IC: Evaluate should_interrupt()
-    
-    alt Explicit Interrupt Word
-        IC->>Agent: INTERRUPT ❌
-    else Grace Period Expired
-        IC->>Agent: INTERRUPT ❌
-    else Backchannel Only
-        IC->>IC: IGNORE ✓
-    else Mixed/Semantic Input
-        IC->>Agent: INTERRUPT ❌
-    else No Tokens
-        IC->>IC: IGNORE ✓
-    end
+```
+1. Agent Starts Speaking
+   Agent → InterruptController
+   ├─ Event: "agent_state_changed(speaking)"
+   └─ Action: Set agent_is_speaking = TRUE
+
+2. User Starts Speaking (While Agent is Speaking)
+   User → VAD → InterruptController
+   ├─ Event: "user_speech_detected"
+   ├─ Action: Set pending_interrupt = TRUE
+   └─ Action: Set pending_since = current_time
+
+3. User Finishes Speaking
+   User → STT → InterruptController
+   ├─ Event: "user_input_transcribed(final)"
+   └─ Action: Evaluate should_interrupt()
+
+4. Interrupt Decision
+   InterruptController evaluates:
+   ├─ INTERRUPT → session.interrupt() → Agent stops
+   └─ IGNORE → Agent continues speaking
 ```
 
 ## Interrupt Decision Logic
 
-```mermaid
-graph TD
-    Start[User Input Transcribed<br/>Final Transcript] --> Tokenize[Tokenize Transcript<br/>Extract Words]
-    
-    Tokenize --> Check1{Step 1<br/>Contains Interrupt Words?<br/>stop, wait, no, cancel, hold}
-    
-    Check1 -->|YES| Int1[🔴 INTERRUPT<br/>Priority: HIGHEST]
-    
-    Check1 -->|NO| Check2{Step 2<br/>Grace Period Expired?<br/>> 250ms since speech start}
-    
-    Check2 -->|YES| Int2[🔴 INTERRUPT<br/>Priority: HIGH]
-    
-    Check2 -->|NO| Check3{Step 3<br/>Agent Speaking &<br/>All Tokens are Ignore Words?<br/>yeah, ok, hmm, uh}
-    
-    Check3 -->|YES| Ignore1[🟢 IGNORE<br/>Backchannel Response]
-    
-    Check3 -->|NO| Check4{Step 4<br/>Agent Speaking &<br/>Has Meaningful Tokens?}
-    
-    Check4 -->|YES| Int3[🔴 INTERRUPT<br/>Priority: NORMAL]
-    
-    Check4 -->|NO| Ignore2[🟢 IGNORE<br/>Empty/No Content]
-    
-    Int1 --> Execute[Execute Interruption<br/>session.interrupt]
-    Int2 --> Execute
-    Int3 --> Execute
-    
-    Ignore1 --> Continue[Continue<br/>Agent Speaking]
-    Ignore2 --> Continue
-    
-    style Int1 fill:#ff4444,stroke:#cc0000,color:#fff
-    style Int2 fill:#ff6666,stroke:#cc0000,color:#fff
-    style Int3 fill:#ff8888,stroke:#cc0000,color:#fff
-    style Ignore1 fill:#44ff44,stroke:#00cc00,color:#000
-    style Ignore2 fill:#66ff66,stroke:#00cc00,color:#000
-    style Check1 fill:#ffeb3b,stroke:#f57f17
-    style Check2 fill:#ffeb3b,stroke:#f57f17
-    style Check3 fill:#ffeb3b,stroke:#f57f17
-    style Check4 fill:#ffeb3b,stroke:#f57f17
+The system evaluates in **priority order** (top to bottom):
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ STEP 1: Check for Explicit Interrupt Words                  │
+├──────────────────────────────────────────────────────────────┤
+│ Contains: "stop", "wait", "no", "cancel", "hold"?          │
+│                                                              │
+│ YES → ❌ INTERRUPT (Priority: HIGHEST)                       │
+│ NO  → Continue to Step 2                                    │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│ STEP 2: Check Grace Period                                  │
+├──────────────────────────────────────────────────────────────┤
+│ Time since user started speaking > 250ms?                   │
+│                                                              │
+│ YES → ❌ INTERRUPT (Priority: HIGH)                          │
+│ NO  → Continue to Step 3                                    │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│ STEP 3: Check for Backchannel Only                         │
+├──────────────────────────────────────────────────────────────┤
+│ Agent speaking AND all words are ignore words?              │
+│ (yeah, ok, hmm, uh, etc.)                                   │
+│                                                              │
+│ YES → ✅ IGNORE (Backchannel Response)                       │
+│ NO  → Continue to Step 4                                    │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│ STEP 4: Check for Mixed/Semantic Input                     │
+├──────────────────────────────────────────────────────────────┤
+│ Agent speaking AND has meaningful tokens?                   │
+│                                                              │
+│ YES → ❌ INTERRUPT (Priority: NORMAL)                        │
+│ NO  → ✅ IGNORE (Empty/No Content)                           │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## State Machine
+## State Transitions
 
-```mermaid
-stateDiagram-v2
-    [*] --> AgentIdle
-    
-    AgentIdle --> AgentSpeaking: agent_state_changed(speaking)
-    AgentSpeaking --> AgentIdle: agent_state_changed(not speaking)
-    
-    AgentIdle --> UserSpeaking: user_speech_detected
-    UserSpeaking --> AgentIdle: transcript processed
-    
-    AgentSpeaking --> PendingInterrupt: user_speech_detected
-    
-    state PendingInterrupt {
-        [*] --> EvaluatingTranscript
-        EvaluatingTranscript --> CheckingInterruptWords
-        CheckingInterruptWords --> Interrupt: Explicit words found
-        CheckingInterruptWords --> CheckingGracePeriod: Not found
-        CheckingGracePeriod --> Interrupt: > 250ms elapsed
-        CheckingGracePeriod --> CheckingBackchannel: Within grace period
-        CheckingBackchannel --> Ignore: All ignore words
-        CheckingBackchannel --> CheckingMixed: Has other words
-        CheckingMixed --> Interrupt: Meaningful tokens
-        CheckingMixed --> Ignore: No meaningful tokens
-    }
-    
-    PendingInterrupt --> AgentIdle: Interrupt → Agent stops
-    PendingInterrupt --> AgentSpeaking: Ignore → Agent continues
-    
-    note right of AgentSpeaking
-        agent_is_speaking = TRUE
-        Can receive interruptions
-    end note
-    
-    note right of AgentIdle
-        agent_is_speaking = FALSE
-        User input commits normally
-    end note
-    
-    note right of PendingInterrupt
-        pending_interrupt = TRUE
-        pending_since = timestamp
-        Evaluating transcript
-    end note
+```
+[Initial State]
+      │
+      ▼
+┌──────────────┐
+│ Agent Idle   │◀──────────────────┐
+│ (Silent)     │                   │
+└─────┬────────┘                   │
+      │                            │
+      │ agent_state_changed        │
+      │ (speaking)                 │
+      ▼                            │
+┌──────────────────┐               │
+│ Agent Speaking   │               │
+│ agent_is_speaking│               │
+│ = TRUE           │               │
+└─────┬────────────┘               │
+      │                            │
+      │ user_speech_detected       │
+      ▼                            │
+┌──────────────────────┐           │
+│ Pending Interrupt    │           │
+│ pending_interrupt=TRUE│          │
+│ pending_since=now()  │           │
+└─────┬────────────────┘           │
+      │                            │
+      │ Evaluate Transcript        │
+      ▼                            │
+┌─────────────┐                    │
+│  Decision   │                    │
+├─────────────┤                    │
+│ Interrupt?  │───YES──▶ INTERRUPT─┤
+│             │         Agent stops │
+│             │                     │
+│             │───NO───▶ IGNORE     │
+│                       Continue    │
+└───────────────────────────────────┘
 ```
 
-## Component Breakdown
+## Examples: When to Interrupt vs Ignore
 
-### 1. System Components
+### ❌ INTERRUPT Scenarios (Agent Speech is Canceled)
+
+**Scenario 1: Explicit Interrupt Word**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: "STOP"
+Result: ❌ INTERRUPT (Highest Priority)
+```
+
+**Scenario 2: Grace Period Expired**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: "What about..." (speaks for > 250ms)
+Result: ❌ INTERRUPT (High Priority)
+```
+
+**Scenario 3: Meaningful Conversation**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: "Tell me about Paris instead"
+Result: ❌ INTERRUPT (Normal Priority)
+```
+
+### ✅ IGNORE Scenarios (Agent Continues Speaking)
+
+**Scenario 1: Backchannel Only**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: "yeah"
+Result: ✅ IGNORE (Backchannel)
+```
+
+**Scenario 2: Multiple Backchannels**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: "ok hmm right"
+Result: ✅ IGNORE (All Backchannel Words)
+```
+
+**Scenario 3: Empty/Silence**
+```
+Agent: "The Battle of Waterloo took place in..."
+User: [no meaningful speech]
+Result: ✅ IGNORE (No Content)
+```
+
+## Decision Priority Summary
+
+```
+Priority 1 (HIGHEST)   → Explicit interrupt words
+        ↓
+Priority 2 (HIGH)      → Grace period expired (>250ms)
+        ↓
+Priority 3 (MEDIUM)    → Check backchannel
+        ↓
+Priority 4 (NORMAL)    → Mixed/semantic input
+        ↓
+Default                → Ignore (no meaningful tokens)
+```
+
+## Component Details
+
+### System Components
 
 | Component | Responsibility |
 |-----------|---------------|
@@ -172,88 +250,13 @@ stateDiagram-v2
 | **Session Handlers** | Connects events to interrupt controller |
 | **Voice Agent** | Main agent orchestrating the conversation |
 
-### 2. Configuration Parameters
+### Configuration Parameters
 
 | Parameter | Value | Purpose |
 |-----------|-------|---------|
 | **ignore_words** | `yeah`, `ok`, `okay`, `hmm`, `uh`, `uh-huh`, `aha`, `right`, `correct` | Backchannel words that don't interrupt |
 | **interrupt_words** | `stop`, `wait`, `no`, `cancel`, `hold` | Explicit commands that force interruption |
 | **grace_ms** | `250ms` | Time window before treating speech as interruption |
-
-### 3. State Variables
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| **agent_is_speaking** | Boolean | Tracks if agent is currently speaking |
-| **pending_interrupt** | Boolean | Marks when user speaks during agent speech |
-| **pending_since** | Timestamp | Records when user started speaking |
-
-### 4. Decision Priority Levels
-
-The system evaluates interruptions in this cascading order:
-
-```
-Priority 1: EXPLICIT INTERRUPT WORDS (stop, wait, no, cancel, hold)
-    ↓ If not found
-Priority 2: GRACE PERIOD CHECK (> 250ms elapsed)
-    ↓ If within grace period
-Priority 3: BACKCHANNEL DETECTION (all words are yeah/ok/hmm)
-    ↓ If has other words
-Priority 4: MIXED/SEMANTIC INPUT (meaningful conversation)
-    ↓ If no meaningful tokens
-Result: IGNORE (empty or silence)
-```
-
-### 5. Event Processing Flow
-
-**Step 1**: Agent State Monitoring
-- Listens to `agent_state_changed` and `speech_created` events
-- Updates `agent_is_speaking` flag
-
-**Step 2**: User Speech Detection
-- Captures `user_input_transcribed` events
-- Sets `pending_interrupt` if agent is speaking
-
-**Step 3**: Transcript Evaluation
-- Tokenizes the user's transcript
-- Applies decision logic cascade
-
-**Step 4**: Action Execution
-- **Interrupt**: Calls `session.interrupt()` to stop agent
-- **Ignore**: Allows agent to continue speaking
-
-## Visual Summary
-
-### Interrupt vs Ignore Scenarios
-
-```mermaid
-graph LR
-    subgraph "🔴 INTERRUPT Scenarios"
-        I1[User says: STOP]
-        I2[User speaks > 250ms]
-        I3[User: Tell me about Paris]
-    end
-    
-    subgraph "🟢 IGNORE Scenarios"
-        G1[User says: yeah]
-        G2[User says: ok hmm]
-        G3[User: silence]
-    end
-    
-    style I1 fill:#ff4444,color:#fff
-    style I2 fill:#ff4444,color:#fff
-    style I3 fill:#ff4444,color:#fff
-    style G1 fill:#44ff44,color:#000
-    style G2 fill:#44ff44,color:#000
-    style G3 fill:#44ff44,color:#000
-```
-
-## Color Legend
-
-- 🔴 **Red**: Interrupt actions - agent speech is canceled
-- 🟢 **Green**: Ignore actions - agent continues speaking
-- 🟡 **Yellow**: Decision points - conditional logic
-- 🔵 **Blue**: System components and state
 
 ## Implementation Files
 
