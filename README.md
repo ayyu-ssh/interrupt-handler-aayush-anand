@@ -3,7 +3,9 @@
 This project extends **LiveKit Agents** with a manual turn-detection pipeline and a
 custom interrupt controller. The goal is to reduce false interruptions from backchannel
 utterances (e.g., “yeah”, “uh-huh”) while still honoring explicit interrupt words.
+## Video Solution
 
+Watch the prepared assignment solution: [Video Link](https://drive.google.com/file/d/1jq7hFIStgqCHk_kn7PFOVdT8bnMb3Gdl/view?usp=sharing)
 ## Features
 
 - Manual turn detection with custom interrupt logic.
