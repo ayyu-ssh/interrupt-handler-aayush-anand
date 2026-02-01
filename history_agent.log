@@ -1,0 +1,11 @@
+2026-02-01 13:10:17,000 INFO [history-agent] IntroAgent entering the session, generating intro message
+2026-02-01 13:10:17,001 INFO [history-agent] Speech created → AgentSpeaking TRUE
+2026-02-01 13:10:55,654 INFO [history-agent] IntroAgent entering the session, generating intro message
+2026-02-01 13:10:55,654 INFO [history-agent] Speech created → AgentSpeaking TRUE
+2026-02-01 13:11:09,316 INFO [history-agent] Usage: UsageSummary(llm_prompt_tokens=153, llm_prompt_cached_tokens=0, llm_input_audio_tokens=0, llm_input_cached_audio_tokens=0, llm_input_text_tokens=0, llm_input_cached_text_tokens=0, llm_input_image_tokens=0, llm_input_cached_image_tokens=0, llm_completion_tokens=36, llm_output_audio_tokens=0, llm_output_image_tokens=0, llm_output_text_tokens=0, tts_characters_count=0, tts_audio_duration=0.0, stt_audio_duration=29.199999999999946)
+2026-02-01 13:11:14,260 INFO [history-agent] Usage: UsageSummary(llm_prompt_tokens=153, llm_prompt_cached_tokens=0, llm_input_audio_tokens=0, llm_input_cached_audio_tokens=0, llm_input_text_tokens=0, llm_input_cached_text_tokens=0, llm_input_image_tokens=0, llm_input_cached_image_tokens=0, llm_completion_tokens=36, llm_output_audio_tokens=0, llm_output_image_tokens=0, llm_output_text_tokens=0, tts_characters_count=0, tts_audio_duration=0.0, stt_audio_duration=13.999999999999975)
+2026-02-01 13:16:14,939 INFO [history-agent] IntroAgent entering the session, generating intro message
+2026-02-01 13:16:14,939 INFO [history-agent] Speech created → AgentSpeaking TRUE
+2026-02-01 13:16:34,174 INFO [history-agent] AgentSpeaking : False Committing user turn: Okay.
+2026-02-01 13:16:34,178 INFO [history-agent] Speech created → AgentSpeaking TRUE
+2026-02-01 13:17:01,783 INFO [history-agent] Usage: UsageSummary(llm_prompt_tokens=351, llm_prompt_cached_tokens=0, llm_input_audio_tokens=0, llm_input_cached_audio_tokens=0, llm_input_text_tokens=0, llm_input_cached_text_tokens=0, llm_input_image_tokens=0, llm_input_cached_image_tokens=0, llm_completion_tokens=49, llm_output_audio_tokens=0, llm_output_image_tokens=0, llm_output_text_tokens=0, tts_characters_count=210, tts_audio_duration=12.352999999999998, stt_audio_duration=24.099999999999955)
