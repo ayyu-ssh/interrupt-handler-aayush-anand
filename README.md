@@ -6,6 +6,12 @@ utterances (e.g., “yeah”, “uh-huh”) while still honoring explicit interr
 ## Video Solution
 
 Watch the prepared assignment solution: [Video Link](https://drive.google.com/file/d/1jq7hFIStgqCHk_kn7PFOVdT8bnMb3Gdl/view?usp=sharing)
+
+### Additional Resources
+
+- [Interrupt Handler Flow Documentation](interrupt-handler-flow.md) — Detailed workflow and logic explanation
+- [Agent Logs](history_agent.log) — Runtime logs and debugging information
+
 ## Features
 
 - Manual turn detection with custom interrupt logic.
